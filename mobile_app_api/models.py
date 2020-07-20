@@ -64,3 +64,8 @@ class Consumption(models.Model):
     date = models.CharField(max_length=100, null=True, blank=True)
     consumption = models.CharField(max_length=100, null=True, blank=True)
     unit = models.CharField(max_length=100, null=True, blank=True)
+
+class ConsumptionMobile(models.Model):
+    tag_id = models.CharField(max_length=100, null=True, blank=True)
+    last_reading_date = models.DateTimeField(null=True,blank=True)
+    new_reading_date = models.DateTimeField(null=True,blank=True)

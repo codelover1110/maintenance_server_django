@@ -1,9 +1,15 @@
 from django.shortcuts import render, get_object_or_404
 from django.http import HttpResponse
-from .models import User, ShopData, AdminUser, VoteData, MetaData, DegreeDay, Consumption
+from .models import User, ShopData, AdminUser, VoteData, MetaData, DegreeDay, Consumption, ConsumptionMobile
 from django.http import JsonResponse
 from django.forms.models import model_to_dict
 import json
+from django.core import serializers
+
+from datetime import datetime
+from dateutil.parser import parse
+import pandas as pd
+
 # Create your views here.
 def getUser(request, email, password):
     try:
@@ -286,14 +292,14 @@ def getMetadatas(request):
   return JsonResponse(data_list, safe=False)
 
 def getMetaData(request, id):
-  metadata = model_to_dict(MetaData.objects.get(id = id))
+  metadata = model_to_dict(MetaData.objects.get(tag_id = id))
   metadata['meta_data_picture'] = str(metadata.get('meta_data_picture'))
   return JsonResponse(metadata)
 
 def updateMetaData(request, id):
   try:
     content = json.loads(request.POST.get('content'))
-    metaData = MetaData.objects.get(id=id)
+    metaData = MetaData.objects.get(tag_id=id)
     
     metaData.tag_id = content['tagID']
     metaData.nfc_tag = content['nfcTag']
@@ -321,6 +327,37 @@ def updateMetaData(request, id):
 
 
   return JsonResponse(data)
+
+def updateMetaDataMobile(request):
+  try:
+    content = request.POST
+    id = content['id']
+    print(content)
+    metaData = MetaData.objects.get(id=id)
+    
+    metaData.tag_id = content['tagID']
+    metaData.nfc_tag = content['nfcTag']
+    metaData.media_type = content['mediaType']
+    metaData.energy_media_type = content['energyMediaType']
+    metaData.meter_point_description = content['meterPointDescription']
+    metaData.energy_unit = content['energyUnit']
+    metaData.group = content['group']
+    metaData.column_line = content['columnLine']
+    metaData.meter_location = content['meterLocation']
+    metaData.energy_art = content['energyArt']
+    metaData.supply_area_child = content['supplyAreaChild']
+    metaData.meter_level_structure = content['meterLevelStructure']
+    metaData.supply_area_parent = content['supplyAreaParent']
+    metaData.longtitude = content['longtitude']
+    metaData.latitude = content['latitude']
+    metaData.save()
+  
+    data = {"success": "true"}
+  except:
+    data = {"success": "false"}
+
+  return JsonResponse(data)
+
 
 def deleteMetaData(request, id):
   print(id)
@@ -394,23 +431,23 @@ def deleteDegreeDay(request, id):
 
 
 
-# CRUD DegreeDays
+# CRUD Counsumption
 def createConsumption(request):
-    content = json.loads(request.POST.get('content'))
-    try:
-      Consumption.objects.create(
-          tag_id = content['tag_id'],
-          nfc_tag = content['nfc_tag'],
-          date = content['date'],
-          consumption = content['consumption'],
-          unit = content['unit'],
-          
-      )
-      data = {"success": "true" }
-    except:
-      data = {"success": "false"}
-   
-    return JsonResponse(data)
+  content = json.loads(request.POST.get('content'))
+  try:
+    Consumption.objects.create(
+        tag_id = content['tag_id'],
+        nfc_tag = content['nfc_tag'],
+        date = content['date'],
+        consumption = content['consumption'],
+        unit = content['unit'],
+        
+    )
+    data = {"success": "true" }
+  except:
+    data = {"success": "false"}
+  
+  return JsonResponse(data)
 
 def getConsumptions(request):
   consumptions = Consumption.objects.all()
@@ -455,4 +492,43 @@ def deleteConsumption(request, id):
     return JsonResponse({'success': 'false'})
 
 
+# CRUD Counsumption Mobile
+
+def editConsumptionmobile(request, tag_id):
+  try:
+    datas = ConsumptionMobile.objects.filter(tag_id = tag_id).all()
+    serialized_obj = serializers.serialize('json', [ datas[(len(datas) - 1)], ])
+    return JsonResponse(serialized_obj, safe=False)
+  except:
+    return JsonResponse({'success': 'false'})
+
+def editConsumptionlocation(request, tag_id):
+  try:
+    datas = Consumption.objects.filter(tag_id = tag_id).all()
+    serialized_obj = serializers.serialize('json', [ datas[(len(datas) - 1)], ])
+    return JsonResponse(serialized_obj, safe=False)
+  except:
+    return JsonResponse({'success': 'false'})
+
+
+def manageConsumptionData(request):
+  content = request.POST
+  if content['lastDate'] == 'There is no data':
+    lastDate = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+  else:
+    lastDate = (datetime.strptime(content['lastDate'], '%Y-%m-%d %H:%M:%S'))
+  print(lastDate)
+  newDate = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+  try:
+    ConsumptionMobile.objects.create(
+        tag_id = content['tagID'],
+        last_reading_date = lastDate,
+        new_reading_date = newDate,
+        
+    )
+    data = {"success": "true" }
+  except:
+    data = {"success": "false"}
+  
+  return JsonResponse(data)
 

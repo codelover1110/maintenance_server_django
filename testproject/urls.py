@@ -68,6 +68,16 @@ urlpatterns = [
     path('updateConsumption/<id>', views.updateConsumption),
     path('deleteConsumption/<id>', views.deleteConsumption),
 
+    # mobile routing
+    path('updateMetaDataMobile/', views.updateMetaDataMobile),
+
+    # mobile consumtion routing
+    # path('createConsumptionmobile/', views.createConsumptionmobile),
+    # path('getConsumptionsmobile/', views.getConsumptionsmobile),
+    path('editConsumptionmobile/<tag_id>', views.editConsumptionmobile),
+    path('editConsumptionlocation/<tag_id>', views.editConsumptionlocation),
+    path('manageConsumptionData/', views.manageConsumptionData),
+    # path('deleteConsumptionmobile/<id>', views.deleteConsumptionmobile),
 
 
 
