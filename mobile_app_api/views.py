@@ -1,6 +1,6 @@
 from django.shortcuts import render, get_object_or_404
 from django.http import HttpResponse
-from .models import User, ShopData, AdminUser, VoteData, MetaData, DegreeDay, Consumption, ConsumptionMobile
+from .models import User, TechnicalCatergory, MetaData_Main, MetaData_Activity, MetaData_Archive
 from django.http import JsonResponse
 from django.forms.models import model_to_dict
 import json
@@ -10,15 +10,27 @@ from datetime import datetime
 from dateutil.parser import parse
 import pandas as pd
 
+from django.core.mail import send_mail
+
+from django.template import Context
+from django.template.loader import render_to_string, get_template
+from django.core.mail import EmailMessage
+import random
+import string
+
 # Create your views here.
 def getUser(request, email, password):
     try:
         user = get_object_or_404(User, email = email)
         if user.password == password:
+          if user.active == 'Active':
             data = {
                 'email': user.email,
                 'password': user.password
             }
+          else:
+            return JsonResponse({'active': 'Inactive'})
+           
         else:
             data = {
                 'email': user.email,
@@ -34,27 +46,22 @@ def getUser(request, email, password):
 def getAdminUser(request):
     userInfor = json.loads(request.body.decode('utf-8'))
     username = userInfor['username']
-    print(username)
-    user = AdminUser.objects.filter(user_name = username)
-    if user:
-      try:
-          user = get_object_or_404(AdminUser, user_name = username)
-          if  user.password == userInfor['password']:
-              data = {
-                'user_name': user.user_name,
-                'password': user.password
-              }
-          else:
-            data = {
-              'user_name': user.user_name,
-              'password': ''
-            }
-      except:
+    try:
+      user = get_object_or_404(User, user_name = username)
+      if  user.password == userInfor['password']:
+        if user.user_authority == 'Admin' and user.active == 'Active':
+          data = {
+            'user_name': user.user_name,
+            'password': user.password
+          }
+        else:
+          return JsonResponse({'Authority': 'false'})
+      else:
         data = {
-          'user_name': '',
+          'user_name': user.user_name,
           'password': ''
-        }
-    else:
+      }
+    except:
       data = {
         'user_name': '',
         'password': ''
@@ -63,7 +70,7 @@ def getAdminUser(request):
     return  JsonResponse(data)
 
 def getAdminUsers(request):
-  users = AdminUser.objects.all()
+  users = User.objects.all()
   user_list = []
   for user in users:
     item = model_to_dict(user)
@@ -71,14 +78,6 @@ def getAdminUsers(request):
 
   return JsonResponse(user_list, safe=False)
 
-def getCustomerUsers(request):
-  users = VoteData.objects.all()
-  user_list = []
-  for user in users:
-    item = model_to_dict(user)
-    user_list.append(item)
-
-  return JsonResponse(user_list, safe=False)
 
 def addUser(request):
     try:
@@ -86,8 +85,8 @@ def addUser(request):
             name = request.POST['name'],
             email = request.POST['email'],
             password = request.POST['password'],
-            age = request.POST['age'],
-            gender = request.POST['gender'],
+            active = "Inactive",
+            authority = "Mobile"
         )
         data = {"success": "true" }
     except:
@@ -99,7 +98,7 @@ def addAdminUser(request):
     if request.method == "POST":
         details = json.loads(request.body.decode('utf-8'))
     try:
-        AdminUser.objects.create(
+        User.objects.create(
             email = details['email'],
             password = details['password'],
             user_name = details['username']
@@ -111,34 +110,62 @@ def addAdminUser(request):
 
     return JsonResponse(data)
 
-def manageShopData(request):
-    print(request.FILES['cover'])
+
+# CRUD user at Web page
+def createUser(request):
     content = json.loads(request.POST.get('content'))
-    print(content['nfcID'])
     try:
-      ShopData.objects.create(
-          store_picture = request.FILES['cover'],
-          nfc_uid = content['nfcID'],
-          nfc_store_id = content['nfcStoreID'],
-          store_name = content['storeName'],
-          store_address = content['storeAddress'],
-          store_postcode = content['storePostcode'],
-          stroe_city = content['storeCity'],
-          longtitude = content['longtitude'],
-          latitude = content['latitude']
+      test = model_to_dict(User.objects.get(user_name = content['username']))
+      if test['user_name'] != '':
+        return JsonResponse({"success": "false"})
+    except:
+      print("ok")
+    try:
+      User.objects.create(
+          user_name = content['username'],
+          name = content['name'],
+          email = content['email'],
+          password = content['password'],
+          company = content['company'],
+          phone = content['phone'],
+          user_authority = content['authority'],
+          active = content['active'],
+          technical_authority = content['technical']
       )
       data = {"success": "true" }
     except:
-      data = {"success": "false"}
-   
+        data = {"success": "false"}
     return JsonResponse(data)
 
+def editUser(request, id):
+  user = model_to_dict(User.objects.get(id = id))
+  return JsonResponse(user)
+
+def updateUser(request, id):
+  try:
+    content = json.loads(request.POST.get('content'))
+    user = User.objects.get(id=id)
+    user.name = content['name']
+    user.user_name = content['username']
+    user.phone = content['phone']
+    user.password = content['password']
+    user.email = content['email']
+    user.user_authority = content['authority']
+    user.active = content['active']
+    user.company = content['company']
+    user.technical_authority = content['technical']
+    user.save()
+    data = {"success": "false"}
+  except:
+    data = {"success": "true"}
+  return JsonResponse(data)
+
+
 def home(request): 
-    return HttpResponse('Hello, ShopVote!')
+    return HttpResponse('Hello, Server!')
     
 def deleteAdminUser(request, id):
-  print(id)
-  user = AdminUser.objects.get(id = id)
+  user = User.objects.get(id = id)
   if user:
     user.delete()
     return JsonResponse({'success': 'true'})
@@ -146,7 +173,6 @@ def deleteAdminUser(request, id):
     return JsonResponse({'success': 'false'})  
 
 def deleteCustomerUser(request, id):
-  print(id)
   user = VoteData.objects.get(id = id)
   if user:
     user.delete()
@@ -154,173 +180,67 @@ def deleteCustomerUser(request, id):
   else:
     return JsonResponse({'success': 'false'})
 
-def getShopDatas(request):
-  shopDatas = ShopData.objects.all()
-  shop_list = []
-  for shopData in shopDatas:
-    item = model_to_dict(shopData)
-    if (item.get('store_picture')):
-        item['store_picture'] = str(item.get('store_picture'))
-        print(item)
 
-    shop_list.append(item)
-
-  return JsonResponse(shop_list, safe=False)
-
-def getShopData(request, id):
-  shopdata = model_to_dict(ShopData.objects.get(id = id))
-  shopdata['store_picture'] = str(shopdata.get('store_picture'))
-  return JsonResponse(shopdata)
-
-def updateShopData(request, id):
-  try:
+# CRUD metamain data
+def createMetaMainData(request):
+    try:
+      metaImage = (request.FILES['cover'])
+    except:
+      metaImage = {}
     content = json.loads(request.POST.get('content'))
-    shopData = ShopData.objects.get(id=id)
-    
-    shopData.nfc_uid = content['nfcID']
-    shopData.nfc_store_id = content['nfcStoreID']
-    shopData.store_name = content['storeName']
-    shopData.store_address = content['storeAddress']
-    shopData.store_postcode = content['storePostcode']
-    shopData.stroe_city = content['storeCity']
-    shopData.longtitude = content['longtitude']
-    shopData.latitude = content['latitude']
-    shopData.save()
-    shopData.store_picture.save(str(shopData.store_picture), request.FILES['cover'])
-
-    
-    data = {"success": "false"}
-  except:
-    data = {"success": "true"}
-
-
-  return JsonResponse(data)
-
-def deleteShopData(request, id):
-  print(id)
-  shopData = ShopData.objects.get(id = id)
-  if shopData:
-    shopData.delete()
-    return JsonResponse({'success': 'true'})
-  else:
-    return JsonResponse({'success': 'false'})
-
-def getCustomerShopData(request, shopid):
-  shopdata = model_to_dict(ShopData.objects.get(nfc_store_id = shopid))
-  shopdata['store_picture'] = str(shopdata.get('store_picture'))
-  return JsonResponse(shopdata)
-
-
-def manageVoteData(request):
-    content = request.POST
     # try:
-    VoteData.objects.create(
-        customer_email = content['cutomerID'],
-        vote_name = 'Service',
-        vote = content['serviceStatus'],
-        nfc_store_id = content['nfc_store_id'],
-        shop_name = content['shopName'],
-        longtitude = content['longtitude'],
-        latitude = content['latitude'],
-    )
-    VoteData.objects.create(
-        customer_email = content['cutomerID'],
-        vote_name = 'Tilgængelighed',
-        vote = content['availabilityStatus'],
-        shop_name = content['shopName'],
-        nfc_store_id = content['nfc_store_id'],
-        longtitude = content['longtitude'],
-        latitude = content['latitude'],
-    )
-    VoteData.objects.create(
-        customer_email = content['cutomerID'],
-        vote_name = 'Udvalg',
-        vote = content['selectionStatus'],
-        nfc_store_id = content['nfc_store_id'],
-        shop_name = content['shopName'],
-        longtitude = content['longtitude'],
+    MetaData_Main.objects.create(
+        meta_data_picture = metaImage,
+        technical_category = content['technical'],
+        equipment_name = content['equipmentName'],
+        nfc_tag = content['nfcTag'],
+        service_interval = content['serviceInterval'],
+        legit = content['legal'],
+        expected_service = content['expectedService'],
+        latest_service = content['latestService'],
+        contacts = content['contacts'],
+        longitude = content['longitude'],
         latitude = content['latitude'],
     )
     data = {"success": "true" }
     # except:
     #   data = {"success": "false"}
    
-    print(data)
     return JsonResponse(data)
 
-
-# CRUD metadata
-def createMetaData(request):
-    print(request.FILES['cover'])
-    content = json.loads(request.POST.get('content'))
-    try:
-      MetaData.objects.create(
-          meta_data_picture = request.FILES['cover'],
-          tag_id = content['tagID'],
-          nfc_tag = content['nfcTag'],
-          media_type = content['mediaType'],
-          energy_media_type = content['energyMediaType'],
-          meter_point_description = content['meterPointDescription'],
-          energy_unit = content['energyUnit'],
-          group = content['group'],
-          column_line = content['columnLine'],
-          meter_location = content['meterLocation'],
-          energy_art = content['energyArt'],
-          supply_area_child = content['supplyAreaChild'],
-          meter_level_structure = content['meterLevelStructure'],
-          supply_area_parent = content['supplyAreaParent'],
-          longtitude = content['longtitude'],
-          latitude = content['latitude']
-      )
-      data = {"success": "true" }
-    except:
-      data = {"success": "false"}
-   
-    return JsonResponse(data)
-
-def getMetadatas(request):
-  metaDatas = MetaData.objects.all()
+def getMetaMaindatas(request):
+  metaDatas = MetaData_Main.objects.all()
   data_list = []
   for metaData in metaDatas:
     item = model_to_dict(metaData)
     if (item.get('meta_data_picture')):
         item['meta_data_picture'] = str(item.get('meta_data_picture'))
-        print(item)
-
     data_list.append(item)
 
   return JsonResponse(data_list, safe=False)
 
-def getMetaData(request, id):
-  metadata = model_to_dict(MetaData.objects.get(tag_id = id))
+def getMetaMainData(request, id):
+  metadata = model_to_dict(MetaData_Main.objects.get(id = id))
   metadata['meta_data_picture'] = str(metadata.get('meta_data_picture'))
   return JsonResponse(metadata)
 
-def updateMetaData(request, id):
+
+def updateMetaMainData(request, id):
   try:
     content = json.loads(request.POST.get('content'))
-    metaData = MetaData.objects.get(tag_id=id)
-    
-    metaData.tag_id = content['tagID']
-    metaData.nfc_tag = content['nfcTag']
-    metaData.media_type = content['mediaType']
-    metaData.energy_media_type = content['energyMediaType']
-    metaData.meter_point_description = content['meterPointDescription']
-    metaData.energy_unit = content['energyUnit']
-    metaData.group = content['group']
-    metaData.column_line = content['columnLine']
-    metaData.meter_location = content['meterLocation']
-    metaData.energy_art = content['energyArt']
-    metaData.supply_area_child = content['supplyAreaChild']
-    metaData.meter_level_structure = content['meterLevelStructure']
-    metaData.supply_area_parent = content['supplyAreaParent']
-    metaData.supply_area_parent = content['supplyAreaParent']
-    metaData.longtitude = content['longtitude']
+    metaData = MetaData_Main.objects.get(id=id)
+    metaData.contacts = content['contacts']
+    metaData.equipment_name = content['equipmentName']
+    metaData.expected_service = content['expectedService']
+    metaData.latest_service = content['latestService']
     metaData.latitude = content['latitude']
+    metaData.legit = content['legal']
+    metaData.longitude = content['longitude']
+    metaData.nfc_tag = content['nfcTag']
+    metaData.service_interval = content['serviceInterval']
+    metaData.technical_category = content['technical']
     metaData.save()
     metaData.meta_data_picture.save(str(metaData.meta_data_picture), request.FILES['cover'])
-
-    
     data = {"success": "false"}
   except:
     data = {"success": "true"}
@@ -328,207 +248,156 @@ def updateMetaData(request, id):
 
   return JsonResponse(data)
 
-def updateMetaDataMobile(request):
-  try:
-    content = request.POST
-    id = content['id']
-    print(content)
-    metaData = MetaData.objects.get(id=id)
-    
-    metaData.tag_id = content['tagID']
-    metaData.nfc_tag = content['nfcTag']
-    metaData.media_type = content['mediaType']
-    metaData.energy_media_type = content['energyMediaType']
-    metaData.meter_point_description = content['meterPointDescription']
-    metaData.energy_unit = content['energyUnit']
-    metaData.group = content['group']
-    metaData.column_line = content['columnLine']
-    metaData.meter_location = content['meterLocation']
-    metaData.energy_art = content['energyArt']
-    metaData.supply_area_child = content['supplyAreaChild']
-    metaData.meter_level_structure = content['meterLevelStructure']
-    metaData.supply_area_parent = content['supplyAreaParent']
-    metaData.longtitude = content['longtitude']
-    metaData.latitude = content['latitude']
-    metaData.save()
-  
-    data = {"success": "true"}
-  except:
-    data = {"success": "false"}
 
-  return JsonResponse(data)
-
-
-def deleteMetaData(request, id):
-  print(id)
-  metaData = MetaData.objects.get(id = id)
+def deleteMetaMainData(request, id):
+  metaData = MetaData_Main.objects.get(id = id)
   if metaData:
     metaData.delete()
+    MetaData_Archive.objects.create(
+        meta_data_picture = metaData.meta_data_picture,
+        technical_category = metaData.technical_category,
+        equipment_name = metaData.equipment_name,
+        nfc_tag = metaData.nfc_tag,
+        service_interval = metaData.service_interval,
+        legit = metaData.legit,
+        expected_service = metaData.expected_service,
+        latest_service = metaData.latest_service,
+        contacts = metaData.contacts,
+        longitude = metaData.longitude,
+        latitude = metaData.latitude
+    )
     return JsonResponse({'success': 'true'})
   else:
     return JsonResponse({'success': 'false'})
 
+def getMetaActivity(request, id):
+  try:
+    datas = MetaData_Activity.objects.filter(equipment_name = id).all()
+    serialized_obj = serializers.serialize('json', datas)
+    return JsonResponse(serialized_obj, safe=False)
+  except:
+    return JsonResponse({'success': 'false'})
 
-# CRUD DegreeDays
-def createDegreeDay(request):
-    content = json.loads(request.POST.get('content'))
+
+def getMetaArchiveDatas(request):
+  metaDatas = MetaData_Archive.objects.all()
+  data_list = []
+  for metaData in metaDatas:
+    item = model_to_dict(metaData)
+    if (item.get('meta_data_picture')):
+        item['meta_data_picture'] = str(item.get('meta_data_picture'))
+    data_list.append(item)
+
+  return JsonResponse(data_list, safe=False)
+
+
+
+##################### Finish MetaMainData #############################
+
+###### Maintenance start ###############
+
+def getMaintenance(request):
+  metaDatas = MetaData_Activity.objects.all()
+  data_list = []
+  for metaData in metaDatas:
+    item = model_to_dict(metaData)
+    data_list.append(item)
+
+  return JsonResponse(data_list, safe=False)
+
+# Technical Category
+def getTechnicalCategory(request):
+  categories = TechnicalCatergory.objects.all()
+  data_list = []
+  for category in categories:
+    item = model_to_dict(category)
+    data_list.append(item)
+
+  return JsonResponse(data_list, safe=False)
+
+
+def sendmail(user_name, user_email, reset_time, reset_id):
+    routing_url = "http://localhost:8080/resetpassword?id=" + reset_id
+    ctx = {
+          'user': user_name,
+          'reset_time': reset_time,
+          'reset_url' : routing_url
+    }
+    message = get_template('mail.html').render(ctx)
+    msg = EmailMessage(
+        'Subject',
+        message,
+        'norepleymaintenance@hotmail.com',
+        [user_email],
+    )
+    msg.content_subtype = "html"  # Main content is now text/html
+    msg.send()
+    return HttpResponse('Mail successfully sent')
+
+# Email Reset
+def resetEmail(request):
+    if request.method == "POST":
+        email = json.loads(request.body.decode('utf-8'))
     try:
-      DegreeDay.objects.create(
-          name_of_degree = content['name_of_degree'],
-          period_form = content['period_form'],
-          period_to = content['period_to'],
-          month = content['month'],
-          degree_days = content['degree_days'],
-          
-      )
-      data = {"success": "true" }
+        user = get_object_or_404(User, email = email)
+        newDate = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        letters = string.ascii_lowercase
+        result_str = ''.join(random.choice(letters) for i in range(20))
+        user.reset_time = newDate
+        user.reset_id = result_str
+        user.save()
+        sendmail(user.name, user.email, newDate, result_str)
+        data = {
+          'email': user.email
+        }
     except:
-      data = {"success": "false"}
-   
-    return JsonResponse(data)
-
-def getDegreeDays(request):
-  degreeDays = DegreeDay.objects.all()
-  data_list = []
-  for degreeDay in degreeDays:
-    item = model_to_dict(degreeDay)
-    data_list.append(item)
-
-  return JsonResponse(data_list, safe=False)
-
-def editDegreeDay(request, id):
-  degreeDay = model_to_dict(DegreeDay.objects.get(id = id))
-  return JsonResponse(degreeDay)
-
-def updateDegreeDay(request, id):
-  try:
-    content = json.loads(request.POST.get('content'))
-    degreeDay = DegreeDay.objects.get(id=id)
-    
-    degreeDay.name_of_degree = content['name_of_degree']
-    degreeDay.period_form = content['period_form']
-    degreeDay.period_to = content['period_to']
-    degreeDay.month = content['month']
-    degreeDay.degree_days = content['degree_days']
-   
-    degreeDay.save()
-
-    
-    data = {"success": "false"}
-  except:
-    data = {"success": "true"}
-
-
-  return JsonResponse(data)
-
-def deleteDegreeDay(request, id):
-  degreeDay = DegreeDay.objects.get(id = id)
-  if degreeDay:
-    degreeDay.delete()
-    return JsonResponse({'success': 'true'})
-  else:
-    return JsonResponse({'success': 'false'})
-
-
-
-# CRUD Counsumption
-def createConsumption(request):
-  content = json.loads(request.POST.get('content'))
-  try:
-    Consumption.objects.create(
-        tag_id = content['tag_id'],
-        nfc_tag = content['nfc_tag'],
-        date = content['date'],
-        consumption = content['consumption'],
-        unit = content['unit'],
-        
-    )
-    data = {"success": "true" }
-  except:
-    data = {"success": "false"}
+        data = {
+          'email': '',
+        }
   
-  return JsonResponse(data)
-
-def getConsumptions(request):
-  consumptions = Consumption.objects.all()
-  data_list = []
-  for consumption in consumptions:
-    item = model_to_dict(consumption)
-    data_list.append(item)
-
-  return JsonResponse(data_list, safe=False)
-
-def editConsumption(request, id):
-  consumption = model_to_dict(Consumption.objects.get(id = id))
-  return JsonResponse(consumption)
-
-def updateConsumption(request, id):
-  try:
-    content = json.loads(request.POST.get('content'))
-    consumption = Consumption.objects.get(id=id)
-    
-    consumption.tag_id = content['tag_id']
-    consumption.nfc_tag = content['nfc_tag']
-    consumption.date = content['date']
-    consumption.consumption = content['consumption']
-    consumption.unit = content['unit']
-   
-    consumption.save()
-
-    
-    data = {"success": "false"}
-  except:
-    data = {"success": "true"}
+    return  JsonResponse(data)
 
 
-  return JsonResponse(data)
-
-def deleteConsumption(request, id):
-  consumption = Consumption.objects.get(id = id)
-  if consumption:
-    consumption.delete()
-    return JsonResponse({'success': 'true'})
-  else:
-    return JsonResponse({'success': 'false'})
-
-
-# CRUD Counsumption Mobile
-
-def editConsumptionmobile(request, tag_id):
-  try:
-    datas = ConsumptionMobile.objects.filter(tag_id = tag_id).all()
-    serialized_obj = serializers.serialize('json', [ datas[(len(datas) - 1)], ])
-    return JsonResponse(serialized_obj, safe=False)
-  except:
-    return JsonResponse({'success': 'false'})
-
-def editConsumptionlocation(request, tag_id):
-  try:
-    datas = Consumption.objects.filter(tag_id = tag_id).all()
-    serialized_obj = serializers.serialize('json', [ datas[(len(datas) - 1)], ])
-    return JsonResponse(serialized_obj, safe=False)
-  except:
-    return JsonResponse({'success': 'false'})
-
-
-def manageConsumptionData(request):
-  content = request.POST
-  if content['lastDate'] == 'There is no data':
-    lastDate = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-  else:
-    lastDate = (datetime.strptime(content['lastDate'], '%Y-%m-%d %H:%M:%S'))
-  print(lastDate)
-  newDate = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-  try:
-    ConsumptionMobile.objects.create(
-        tag_id = content['tagID'],
-        last_reading_date = lastDate,
-        new_reading_date = newDate,
+def checkResetID(request):
+    if request.method == "POST":
+        reset_id = json.loads(request.body.decode('utf-8'))
+    try:
+      user = get_object_or_404(User, reset_id = reset_id)
+      current = datetime.now().timestamp()
+      history = datetime.timestamp(user.reset_time)
+      difference = (current - history)/3600
+      if (difference < 24): 
+        data = {
+          'reset_id': user.reset_id
+        }
+      else: 
+        data = {
+          'reset_id': '',
+        }
         
-    )
-    data = {"success": "true" }
-  except:
-    data = {"success": "false"}
+    except:
+        data = {
+          'reset_id': '',
+        }
   
-  return JsonResponse(data)
+    return  JsonResponse(data)
+
+def resetPassword(request):
+    if request.method == "POST":
+      userInfor = json.loads(request.body.decode('utf-8'))
+      password = userInfor['user_email']
+      reset_id = userInfor['reset_id']
+    try:
+        user = get_object_or_404(User, reset_id = reset_id)
+        user.password = password
+        user.save()
+        data = {
+          'reset_id': reset_id,
+        }
+    except:
+        data = {
+          'reset_id': '',
+        }
+  
+    return  JsonResponse(data)
 

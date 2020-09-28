@@ -20,6 +20,8 @@ from django.conf.urls.static import static
 from django.conf import settings
 from mobile_app_api import views
 
+from django.contrib.auth import views as auth_views
+
 urlpatterns = [
     # re_path(r'^getuser/(?P<email>\w+)/?$', views.getUser),
     path('getuser/<email>/<password>/', views.getUser, name="validate_email"),
@@ -27,59 +29,39 @@ urlpatterns = [
     path('addadminuser/', views.addAdminUser),
     path('getadminuser/', views.getAdminUser),
     path('getadminusers/', views.getAdminUsers),
-    path('getcustomerusers/', views.getCustomerUsers),
-    path('getshopdatas/', views.getShopDatas),
-    path('editshopdata/<id>', views.getShopData),
-    path('updateShopData/<id>', views.updateShopData),
-    path('deleteShopData/<id>', views.deleteShopData ),
-
-    # Getting shopdata for react-native
-    path('customershopdata/<shopid>', views.getCustomerShopData),
-    path('manageVoteData/', views.manageVoteData),
-
-
+    # CRUD user
+    path('createUser/', views.createUser),
+    path('getUser/<id>', views.editUser),
+    path('updateUser/<id>', views.updateUser),
 
     path('admin/', admin.site.urls),
-    path('shopdata/', views.manageShopData),
     path('', views.home),
     path('deleteadminuser/<id>', views.deleteAdminUser),
     path('deletecustomer/<id>', views.deleteCustomerUser),
 
-    # metadata routing
-    path('createMetaData/', views.createMetaData),
-    path('getMetaDatas/', views.getMetadatas),
-    path('editMetaData/<id>', views.getMetaData),
-    path('updateMetaData/<id>', views.updateMetaData),
-    path('deleteMetaData/<id>', views.deleteMetaData),
+    # meta main data routing
+    path('createMetaMainData/', views.createMetaMainData),
+    path('getMetaMainDatas/', views.getMetaMaindatas),
+    path('editMetaMainData/<id>', views.getMetaMainData),
+    path('updateMetaMainData/<id>', views.updateMetaMainData),
+    path('deleteMetaMainData/<id>', views.deleteMetaMainData),
 
-    
-    # degree_days routing
-    path('createDegreeDay/', views.createDegreeDay),
-    path('getDegreeDays/', views.getDegreeDays),
-    path('editDegreeDay/<id>', views.editDegreeDay),
-    path('updateDegreeDay/<id>', views.updateDegreeDay),
-    path('deleteDegreeDay/<id>', views.deleteDegreeDay),
+    path('getMetaActivity/<id>', views.getMetaActivity),
+    path('getMetaArchiveDatas/', views.getMetaArchiveDatas),
 
-
-    # consumption routing
-    path('createConsumption/', views.createConsumption),
-    path('getConsumptions/', views.getConsumptions),
-    path('editConsumption/<id>', views.editConsumption),
-    path('updateConsumption/<id>', views.updateConsumption),
-    path('deleteConsumption/<id>', views.deleteConsumption),
+    # maintenance data routing
+    path('getMaintenance/', views.getMaintenance),
+   
+    # technical_category routing
+    path('getTechnicalCatergory/', views.getTechnicalCategory),
 
     # mobile routing
-    path('updateMetaDataMobile/', views.updateMetaDataMobile),
+    path('sendmail', views.sendmail, name='sendmail'),
 
-    # mobile consumtion routing
-    # path('createConsumptionmobile/', views.createConsumptionmobile),
-    # path('getConsumptionsmobile/', views.getConsumptionsmobile),
-    path('editConsumptionmobile/<tag_id>', views.editConsumptionmobile),
-    path('editConsumptionlocation/<tag_id>', views.editConsumptionlocation),
-    path('manageConsumptionData/', views.manageConsumptionData),
-    # path('deleteConsumptionmobile/<id>', views.deleteConsumptionmobile),
-
-
+     # Email reset
+    path('resetEmail/', views.resetEmail),
+    path('checkResetID/', views.checkResetID),
+    path('resetPassword/', views.resetPassword),
 
 ] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
 
